@@ -26,6 +26,8 @@ dash-bootstrap-components = "==1.6.0"
 scikit-learn = "==1.5.1"
 jupyter = "==1.1.1"
 jupyterlab = "==4.2.5"
+cfgrib = "*"
+xarray = "*"
 
 [dev-packages]
 

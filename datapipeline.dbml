@@ -1,0 +1,65 @@
+Project datapipeline {
+  database_type: 'PostgreSQL'
+  Note: '''
+    # Climate Datapipeline for Forecasting Models Dashboard Project
+    data collected from •	ERA5 hourly data on single levels from 1940 to present via the ECMWF platform, Weatherstack API , •	VisualCrossing Weather API 
+  '''
+}
+Table dailydata as D {
+    name varchar [pk]
+    date varchar [pk]
+    tempmax   float
+    tempmin   float
+    temp   float
+    feelslikemax   float
+    feelslikemin   float
+    feelslike   float
+    dew   float
+    humidity   float
+    precip   float
+    precipprob     int
+    precipcover   float
+    preciptype varchar
+    snow     int
+    snowdepth     int
+    windgust   float
+    windspeed   float
+    winddir   float
+    sealevelpressure   float
+    cloudcover   float
+    visibility   float
+    solarradiation   float
+    solarenergy   float
+    uvindex     int
+    sunrise varchar
+    sunset varchar
+    moonphase   float
+    conditions varchar
+    note: "daily weather data extracted from VisualCrossing.com weather API"
+}
+Table hourlydata as H {
+    name varchar [pk]
+    date varchar [pk]
+    time  varchar [pk]
+    surface           float
+    u10         float
+    v10         float
+    t2m         float
+    precipitation       float
+    skt         float
+    solar   float
+    note: "Hourly weather data extracted from ERA5 API combined with location information from VisualCrossing data"
+}
+Table constants as C {
+    name varchar [pk]
+    latitude    float
+    longitude   float
+    lsmask int
+    geopotential   float
+    note: "constant data combines VisualCrossing API location info with ERA5 data"
+}
+
+Ref: C.name < D.name
+Ref: C.name < H.name
+Ref: D.date < H.date
+Ref: D.name < H.name
