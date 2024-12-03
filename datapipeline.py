@@ -13,6 +13,7 @@ from sqlalchemy import create_engine
 import plotly.express as px
 import cfgrib
 import xarray as xr
+import plotly.graph_objs as go
 
 dotenv.load_dotenv()
 
@@ -328,5 +329,392 @@ class DataPipeline:
         constants.to_sql('constants', con=engine, index=False, chunksize=1000, if_exists='replace')
     
     ### Analysis ###
+
+    def plot_basic_weather(self, daily_data, selected_city, start_date, end_date, selected_variable):
+        """
+        Generates a line plot for the selected variable or group of variables in the specified date range and city.
+
+        Args:
+            daily_data (pd.DataFrame): The DataFrame containing daily weather data.
+            selected_city (str): The name of the city.
+            start_date (str): The starting date in 'YYYY-MM-DD' format.
+            end_date (str): The ending date in 'YYYY-MM-DD' format.
+            selected_variable (str): The weather variable or group to plot.
+
+        Returns:
+            go.Figure: A Plotly figure object for the graph.
+        """
+        # Filter data for the selected city and date range
+        filtered_data = daily_data[
+            (daily_data['name'] == selected_city) &
+            (daily_data['date'] >= start_date) &
+            (daily_data['date'] <= end_date)
+        ]
+
+        # Ensure the date column is properly formatted
+        filtered_data['date'] = pd.to_datetime(filtered_data['date'])
+
+        # Define variable groups
+        variable_groups = {
+            'temperature': ['tempmax', 'tempmin', 'temp', 'feelslikemax', 'feelslikemin', 'feelslike'],
+            'windspeed': ['windspeedmax', 'windspeedmin', 'windspeedmean'],
+            'precipitation': ['precip', 'precipprob']
+        }
+
+        # Determine the variables to plot
+        if selected_variable in variable_groups:
+            variables_to_plot = variable_groups[selected_variable]
+        else:
+            variables_to_plot = [selected_variable]
+
+        # Create the line plot
+        fig = go.Figure()
+
+        for variable in variables_to_plot:
+            if variable in filtered_data.columns:
+                fig.add_trace(go.Scatter(
+                    x=filtered_data['date'],  # X-axis: Dates
+                    y=filtered_data[variable],  # Y-axis: Variable data
+                    mode='lines+markers',  # Line plot with markers
+                    name=variable.capitalize(),  # Legend entry
+                    line=dict(width=2),  # Customize line style
+                ))
+
+        # Customize layout
+        fig.update_layout(
+            title=f"{selected_variable.capitalize()} Trends in {selected_city} ({start_date} to {end_date})",
+            xaxis_title="Date",
+            yaxis_title="Value",
+            xaxis=dict(showgrid=True, gridcolor='lightgray', tickformat='%Y-%m-%d'),
+            yaxis=dict(showgrid=True, gridcolor='lightgray'),
+            plot_bgcolor='white',
+            font=dict(size=12),
+            legend=dict(title="Variables", orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5)
+        )
+
+        return fig
+
+    def plot_wind_heatmap(self, hourly_data, selected_city, start_date, end_date):
+        """
+        Generates a heatmap for hourly wind speed patterns.
+
+        Args:
+            hourly_data (pd.DataFrame): DataFrame containing hourly weather data.
+            selected_city (str): Name of the city.
+            start_date (str): Start date (YYYY-MM-DD).
+            end_date (str): End date (YYYY-MM-DD).
+
+        Returns:
+            go.Figure: A Plotly figure object for wind speed heatmap.
+        """
+        # Filter data for the selected city and date range
+        filtered_data = hourly_data[
+            (hourly_data['name'] == selected_city) &
+            (hourly_data['date'] >= start_date) &
+            (hourly_data['date'] <= end_date)
+        ]
+
+        if filtered_data.empty:
+            print("No data available for the selected city and date range.")
+            return go.Figure()
+
+        # Ensure the 'time' column is properly formatted and extract hour
+        filtered_data['time'] = pd.to_datetime(filtered_data['time'])
+        filtered_data['hour'] = filtered_data['time'].dt.hour
+
+        # Calculate wind speed from u10 and v10
+        if 'u10' in filtered_data.columns and 'v10' in filtered_data.columns:
+            wind_speed = np.sqrt(filtered_data['u10'] ** 2 + filtered_data['v10'] ** 2)
+        else:
+            print("No wind data available.")
+            return go.Figure()
+
+        # Create the wind speed heatmap
+        fig = go.Figure(data=go.Heatmap(
+            x=filtered_data['hour'],
+            y=filtered_data['date'],
+            z=wind_speed,
+            colorscale='Viridis',
+            colorbar=dict(title="Wind Speed (m/s)")
+        ))
+
+        fig.update_layout(
+            title=f"Hourly Wind Speed Heatmap in {selected_city}",
+            xaxis_title="Hour of Day",
+            yaxis_title="Date",
+            font=dict(size=12),
+            plot_bgcolor='white'
+        )
+
+        return fig
     
+    def plot_hourly_temperature(self, hourly_data, selected_city, start_date, end_date):
+        """
+        Generates a plot for diurnal temperature patterns.
+
+        Args:
+            hourly_data (pd.DataFrame): DataFrame containing hourly weather data.
+            selected_city (str): Name of the city.
+            start_date (str): Start date (YYYY-MM-DD).
+            end_date (str): End date (YYYY-MM-DD).
+
+        Returns:
+            go.Figure: A Plotly figure object for hourly temperature.
+        """
+        # Filter data for the selected city and date range
+        filtered_data = hourly_data[
+            (hourly_data['name'] == selected_city) &
+            (hourly_data['date'] >= start_date) &
+            (hourly_data['date'] <= end_date)
+        ]
+
+        hourly_averages = filtered_data.groupby('time')['t2m'].mean()
+
+        # Create the temperature plot
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(
+            x=hourly_averages.index,
+            y=hourly_averages,  
+            mode='lines+markers',
+            name='Temperature (°C)',
+            line=dict(color='red', width=2)
+        ))
+
+        fig.update_layout(
+            title=f"Diurnal Temperature Patterns in {selected_city}",
+            xaxis_title="Hour of Day",
+            yaxis_title="Temperature (°C)",
+            xaxis=dict(tickmode='linear', dtick=1),
+            plot_bgcolor='white',
+            font=dict(size=12)
+        )
+
+        return fig
+    
+    def impact_of_humidity_on_temperature(self, daily_data, selected_city):
+        """
+        Explore the relationship between humidity and temperature for the selected city.
+
+        Args:
+            daily_data (pd.DataFrame): DataFrame containing daily weather data.
+            selected_city (str): Name of the city.
+
+        Returns:
+            go.Figure: Scatter plot of humidity vs. temperature with regression line.
+        """
+        city_data = daily_data[daily_data['name'] == selected_city]
+
+        fig = go.Figure()
+
+        # Scatter plot
+        fig.add_trace(go.Scatter(
+            x=city_data['humidity'],
+            y=city_data['temp'],
+            mode='markers',
+            name='Humidity vs Temp',
+            marker=dict(color='blue', size=8, opacity=0.6)
+        ))
+
+        # Fit regression line
+        if not city_data.empty:
+            slope, intercept = np.polyfit(city_data['humidity'], city_data['temp'], 1)
+            regression_line = slope * city_data['humidity'] + intercept
+            fig.add_trace(go.Scatter(
+                x=city_data['humidity'],
+                y=regression_line,
+                mode='lines',
+                name='Regression Line',
+                line=dict(color='red', dash='dash')
+            ))
+
+        fig.update_layout(
+            title=f"Impact of Humidity on Temperature in {selected_city}",
+            xaxis_title="Humidity (%)",
+            yaxis_title="Temperature (°C)",
+            plot_bgcolor='white',
+            font=dict(size=12)
+        )
+
+        return fig
+
+    def cloud_cover_vs_solar_radiation(self, daily_data, selected_city):
+        """
+        Scatter plot of cloud cover vs. solar radiation for the selected city with a regression line.
+
+        Args:
+            daily_data (pd.DataFrame): DataFrame containing daily weather data.
+            selected_city (str): Name of the selected city.
+
+        Returns:
+            go.Figure: Scatter plot for cloud cover vs solar radiation with regression line.
+        """
+        # Filter data for the selected city
+        city_data = daily_data[daily_data['name'] == selected_city]
+
+        fig = go.Figure()
+
+        # Scatter plot
+        fig.add_trace(go.Scatter(
+            x=city_data['cloudcover'],
+            y=city_data['solarradiation'],
+            mode='markers',
+            name=f"{selected_city}",
+            marker=dict(size=8, opacity=0.6)
+        ))
+
+        # Add regression line
+        if not city_data.empty:
+            slope, intercept = np.polyfit(city_data['cloudcover'], city_data['solarradiation'], 1)
+            regression_line = slope * city_data['cloudcover'] + intercept
+            fig.add_trace(go.Scatter(
+                x=city_data['cloudcover'],
+                y=regression_line,
+                mode='lines',
+                name='Regression Line',
+                line=dict(color='red', dash='dash')
+            ))
+
+        # Update layout
+        fig.update_layout(
+            title=f"Cloud Cover vs Solar Radiation in {selected_city}",
+            xaxis_title="Cloud Cover (%)",
+            yaxis_title="Solar Radiation (W/m²)",
+            plot_bgcolor='white',
+            font=dict(size=12)
+        )
+
+        return fig
+
+    def seasonal_analysis(self, daily_data, selected_city):
+        """
+        Bar chart showing seasonal averages for temperature, precipitation, and humidity for the selected city.
+
+        Args:
+            daily_data (pd.DataFrame): DataFrame containing daily weather data.
+            selected_city (str): Name of the selected city.
+
+        Returns:
+            go.Figure: Bar chart for seasonal analysis.
+        """
+        # Define a mapping for season numbers to names
+        season_mapping = {1: 'Winter', 2: 'Spring', 3: 'Summer', 4: 'Fall'}
+
+        # Filter data for the selected city
+        city_data = daily_data[daily_data['name'] == selected_city]
+        city_data['season'] = pd.to_datetime(city_data['date']).dt.month % 12 // 3 + 1
+
+        # Replace season numbers with season names
+        city_data['season'] = city_data['season'].map(season_mapping)
+
+        # Calculate seasonal averages
+        seasonal_averages = city_data.groupby('season')[['temp', 'precip', 'humidity']].mean().reset_index()
+
+        # Create bar chart
+        fig = go.Figure()
+
+        for variable in ['temp', 'precip', 'humidity']:
+            fig.add_trace(go.Bar(
+                x=seasonal_averages['season'],
+                y=seasonal_averages[variable],
+                name=f"{variable.capitalize()}",
+            ))
+
+        # Update layout
+        fig.update_layout(
+            title=f"Seasonal Weather Patterns in {selected_city}",
+            xaxis_title="Season",
+            yaxis_title="Value",
+            barmode='group',
+            plot_bgcolor='white',
+            font=dict(size=12)
+        )
+
+        return fig
+
+    def extreme_weather_analysis(self, daily_data, selected_city):
+        """
+        Heatmap showing the frequency of extreme weather events for the selected city.
+
+        Args:
+            daily_data (pd.DataFrame): DataFrame containing daily weather data.
+            selected_city (str): Name of the selected city.
+
+        Returns:
+            go.Figure: Heatmap for extreme weather events.
+        """
+        city_data = daily_data[daily_data['name'] == selected_city]
+        city_data['extreme_temp'] = (city_data['tempmax'] > 35) | (city_data['tempmin'] < -10)
+        city_data['extreme_precip'] = city_data['precip'] > 50
+
+        extreme_events = city_data.groupby('date')[['extreme_temp', 'extreme_precip']].sum().reset_index()
+
+        fig = go.Figure(data=go.Heatmap(
+            x=extreme_events['date'],
+            y=['Extreme Weather Events'] * len(extreme_events),
+            z=extreme_events['extreme_temp'] + extreme_events['extreme_precip'],
+            colorscale='Reds',
+            colorbar=dict(title="Extreme Events")
+        ))
+
+        fig.update_layout(
+            title=f"Extreme Weather Events in {selected_city}",
+            xaxis_title="Date",
+            yaxis_title="Frequency",
+            plot_bgcolor='white'
+        )
+
+        return fig
+
+    def geographical_insights(self, constants, daily_data, selected_city):
+        """
+        Scatter plot matrix showing relationships between geographical and weather variables for the selected city.
+
+        Args:
+            constants (pd.DataFrame): DataFrame containing geographical data.
+            daily_data (pd.DataFrame): DataFrame containing daily weather data.
+            selected_city (str): Name of the selected city.
+
+        Returns:
+            go.Figure: Scatter plot matrix for geographical insights.
+        """
+        # Filter data for the selected city
+        city_constants = constants[constants['name'] == selected_city]
+        city_weather = daily_data[daily_data['name'] == selected_city]
+
+        # Merge geographical and weather data
+        combined_data = city_constants.merge(city_weather, on='name', how='inner')
+
+        # Select relevant variables
+        variables = ['latitude', 'longitude', 'z', 'lsm', 'temp', 'windspeedmean', 'precip']
+
+        # Create scatter plot matrix
+        scatter_matrix = px.scatter_matrix(
+            combined_data,
+            dimensions=variables,
+            title=f"Geographical Insights in {selected_city}",
+            labels={
+                "latitude": "Latitude",
+                "longitude": "Longitude",
+                "z": "Elevation (m²/s²)",
+                "lsm": "Land-Sea Mask",
+                "temp": "Temperature (°C)",
+                "windspeedmean": "Wind Speed (m/s)",
+                "precip": "Precipitation (mm)"
+            }
+        )
+
+        # Adjust figure size to make it square and improve readability
+        scatter_matrix.update_layout(
+            plot_bgcolor='white',
+            font=dict(size=12),
+            autosize=False,
+            height=800,  # Square-shaped
+            width=800,   # Square-shaped
+            margin=dict(l=50, r=50, t=50, b=50)
+        )
+
+        return scatter_matrix
+
+
+
 

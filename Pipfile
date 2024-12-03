@@ -28,6 +28,7 @@ jupyter = "==1.1.1"
 jupyterlab = "==4.2.5"
 cfgrib = "*"
 xarray = "*"
+sumy = "*"
 
 [dev-packages]
 

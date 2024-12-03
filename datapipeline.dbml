@@ -6,8 +6,8 @@ Project datapipeline {
   '''
 }
 Table dailydata as D {
-    name varchar [pk]
-    date varchar [pk]
+    name varchar  [pk]
+    date varchar  [pk]
     tempmax   float
     tempmin   float
     temp   float
@@ -20,10 +20,13 @@ Table dailydata as D {
     precipprob     int
     precipcover   float
     preciptype varchar
-    snow     int
-    snowdepth     int
+    snow   float
+    snowdepth   float
     windgust   float
     windspeed   float
+    windspeedmax   float
+    windspeedmean   float
+    windspeedmin   float
     winddir   float
     sealevelpressure   float
     cloudcover   float
@@ -31,31 +34,35 @@ Table dailydata as D {
     solarradiation   float
     solarenergy   float
     uvindex     int
+    severerisk     int
     sunrise varchar
     sunset varchar
     moonphase   float
     conditions varchar
+    description varchar
+    source varchar
     note: "daily weather data extracted from VisualCrossing.com weather API"
 }
 Table hourlydata as H {
-    name varchar [pk]
-    date varchar [pk]
-    time  varchar [pk]
-    surface           float
-    u10         float
-    v10         float
-    t2m         float
-    precipitation       float
-    skt         float
-    solar   float
+    name varchar  [pk]
+    date varchar  [pk]
+    time varchar
+    surface   float
+    u10   float
+    v10   float
+    t2m   float
+    sp   float
+    skt   float
     note: "Hourly weather data extracted from ERA5 API combined with location information from VisualCrossing data"
 }
 Table constants as C {
-    name varchar [pk]
-    latitude    float
+    name varchar  [pk]
+    address varchar
+    resolvedaddress varchar
+    latitude   float
     longitude   float
-    lsmask int
-    geopotential   float
+    z   float
+    lsm   float
     note: "constant data combines VisualCrossing API location info with ERA5 data"
 }
 
