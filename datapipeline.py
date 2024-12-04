@@ -51,46 +51,63 @@ class DataPipeline:
             }
             return headers
 
-    def get_current_weather(self):
+    def get_current_weather(self, city_name):
+        """
+        Fetches current weather data for a given city name and returns selected columns.
+
+        Args:
+            city_name (str): Name of the city for which to fetch the current weather.
+
+        Returns:
+            pd.DataFrame: A DataFrame containing selected current weather data for the specified city.
+        """
         url = "https://api.weatherstack.com/current"
-        zip_codes = [f"229{i:02}" for i in range(1, 11)]  # Generate zip codes 22901 to 22910
-        combined_df = pd.DataFrame()  # Initialize an empty DataFrame
 
-        for zip_code in zip_codes:
-            querystring = {
-                "access_key": self.weatherstackkey,  # API key
-                "query": zip_code,  # Current zip code
-                "units": "m"  # Metric units
-            }
-            headers = self.make_headers()  # Assuming self.make_headers() is implemented
+        # Handle specific cases for city names
+        query_city = city_name
+        if city_name.lower() == "lasvegas":
+            query_city = "las vegas"
+        elif city_name.lower() == "losangeles":
+            query_city = "los angeles"
 
-            # Sending the GET request
-            response = requests.get(url, params=querystring, headers=headers)
+        # Define the querystring for the API request
+        querystring = {
+            "access_key": self.weatherstackkey,  # API key
+            "query": query_city,  # Adjusted city name
+            "units": "m"  # Metric units
+        }
+        headers = self.make_headers()  # Assuming self.make_headers() is implemented
 
-            if response.status_code == 200:
-                data = response.json()
-                if 'error' not in data:  # Check for API-specific errors
-                    print(f"Weather data for {zip_code} retrieved successfully!")
-                    request_data = data.get('request', {})
-                    location_data = data.get('location', {})
-                    current_data = data.get('current', {})
+        # Sending the GET request
+        response = requests.get(url, params=querystring, headers=headers)
 
-                    # Convert each section into a DataFrame
-                    request_df = pd.DataFrame([request_data])
-                    location_df = pd.DataFrame([location_data])
-                    current_df = pd.DataFrame([current_data])
+        if response.status_code == 200:
+            data = response.json()
+            if 'error' not in data:  # Check for API-specific errors
+                # print(f"Weather data for {query_city} retrieved successfully!")
 
-                    # Combine all into a single DataFrame for the current zip code
-                    zip_code_df = pd.concat([request_df, location_df, current_df], axis=1)
+                # Extract required fields
+                selected_data = {
+                    "localtime": data.get("location", {}).get("localtime"),
+                    "temperature": data.get("current", {}).get("temperature"),
+                    "weather_icons": data.get("current", {}).get("weather_icons", [None])[0],  # Get the first icon URL
+                    "wind_degree": data.get("current", {}).get("wind_degree"),
+                    "wind_dir": data.get("current", {}).get("wind_dir"),
+                    "precip": data.get("current", {}).get("precip"),
+                    "humidity": data.get("current", {}).get("humidity"),
+                    "feelslike": data.get("current", {}).get("feelslike"),
+                    "visibility": data.get("current", {}).get("visibility"),
+                }
 
-                    # Append the current zip code's data to the combined DataFrame
-                    combined_df = pd.concat([combined_df, zip_code_df], ignore_index=True)
-                else:
-                    print(f"Error in API response for {zip_code}: {data['error']}")
+                # Convert the dictionary into a DataFrame
+                return pd.DataFrame([selected_data])
+
             else:
-                print(f"HTTP Error for {zip_code}: {response.status_code} - {response.reason}")
-
-        return combined_df
+                print(f"Error in API response for {query_city}: {data['error']}")
+                return None
+        else:
+            print(f"HTTP Error for {query_city}: {response.status_code} - {response.reason}")
+            return None
     
     def get_dayly_weather(self):
         file_path = "data/charlottesville 2023-03-01 to 2024-11-01.csv"
@@ -418,29 +435,25 @@ class DataPipeline:
             print("No data available for the selected city and date range.")
             return go.Figure()
 
-        # Ensure the 'time' column is properly formatted and extract hour
-        filtered_data['time'] = pd.to_datetime(filtered_data['time'])
-        filtered_data['hour'] = filtered_data['time'].dt.hour
-
         # Calculate wind speed from u10 and v10
         if 'u10' in filtered_data.columns and 'v10' in filtered_data.columns:
-            wind_speed = np.sqrt(filtered_data['u10'] ** 2 + filtered_data['v10'] ** 2)
+            filtered_data['wind_speed'] = np.sqrt(filtered_data['u10'] ** 2 + filtered_data['v10'] ** 2)
         else:
             print("No wind data available.")
             return go.Figure()
 
         # Create the wind speed heatmap
         fig = go.Figure(data=go.Heatmap(
-            x=filtered_data['hour'],
+            x=filtered_data['time'],  # Use 'time' directly
             y=filtered_data['date'],
-            z=wind_speed,
+            z=filtered_data['wind_speed'],
             colorscale='Viridis',
             colorbar=dict(title="Wind Speed (m/s)")
         ))
 
         fig.update_layout(
             title=f"Hourly Wind Speed Heatmap in {selected_city}",
-            xaxis_title="Hour of Day",
+            xaxis_title="Time",
             yaxis_title="Date",
             font=dict(size=12),
             plot_bgcolor='white'
@@ -665,33 +678,32 @@ class DataPipeline:
 
         return fig
 
-    def geographical_insights(self, constants, daily_data, selected_city):
+    def geographical_insights(self, constants, daily_data):
         """
-        Scatter plot matrix showing relationships between geographical and weather variables for the selected city.
+        Scatter plot matrix showing relationships between geographical and weather variables across all cities.
 
         Args:
             constants (pd.DataFrame): DataFrame containing geographical data.
             daily_data (pd.DataFrame): DataFrame containing daily weather data.
-            selected_city (str): Name of the selected city.
 
         Returns:
             go.Figure: Scatter plot matrix for geographical insights.
         """
-        # Filter data for the selected city
-        city_constants = constants[constants['name'] == selected_city]
-        city_weather = daily_data[daily_data['name'] == selected_city]
+        # Select only numeric columns for mean calculation
+        numeric_columns = ['temp', 'precip', 'windspeedmean']
+        aggregated_data = daily_data.groupby('name')[numeric_columns].mean().reset_index()
 
-        # Merge geographical and weather data
-        combined_data = city_constants.merge(city_weather, on='name', how='inner')
+        # Merge geographical and weather data for all cities
+        combined_data = constants.merge(aggregated_data, on='name', how='inner')
 
-        # Select relevant variables
+        # Select relevant variables for correlation analysis
         variables = ['latitude', 'longitude', 'z', 'lsm', 'temp', 'windspeedmean', 'precip']
 
         # Create scatter plot matrix
         scatter_matrix = px.scatter_matrix(
             combined_data,
             dimensions=variables,
-            title=f"Geographical Insights in {selected_city}",
+            title="Geographical Insights Across Cities",
             labels={
                 "latitude": "Latitude",
                 "longitude": "Longitude",
@@ -714,6 +726,95 @@ class DataPipeline:
         )
 
         return scatter_matrix
+
+    def build_comparison_table(self, daily_data, city1, city2, start_date, end_date):
+        """
+        Build a detailed table comparing weather data for two cities over a specific date range.
+
+        Args:
+            daily_data (pd.DataFrame): DataFrame containing daily weather data.
+            city1 (str): Name of the first city.
+            city2 (str): Name of the second city.
+            start_date (str): Start date (YYYY-MM-DD).
+            end_date (str): End date (YYYY-MM-DD).
+
+        Returns:
+            pd.DataFrame: Detailed comparison table.
+        """
+        # Filter data for the selected cities and date range
+        filtered_data = daily_data[
+            (daily_data['name'].isin([city1, city2])) &
+            (daily_data['date'] >= start_date) &
+            (daily_data['date'] <= end_date)
+        ]
+
+        # Initialize an empty list to store city-specific data
+        rows = []
+
+        for city in [city1, city2]:
+            city_data = filtered_data[filtered_data['name'] == city]
+            metrics = {
+                'City': city,
+                'Avg Temp (°C)': round(city_data['temp'].mean(), 2),
+                'Std Temp (°C)': round(city_data['temp'].std(), 2),
+                'Min Temp (°C)': round(city_data['tempmin'].min(), 2),
+                'Max Temp (°C)': round(city_data['tempmax'].max(), 2),
+                'Avg Wind Speed (m/s)': round(city_data['windspeedmean'].mean(), 2),
+                'Avg Precip (mm)': round(city_data['precip'].mean(), 2),
+                'Std Precip (mm)': round(city_data['precip'].std(), 2),
+                'Max Precip (mm)': round(city_data['precip'].max(), 2),
+                'Avg Humidity (%)': round(city_data['humidity'].mean(), 2),
+            }
+            rows.append(metrics)
+
+        # Convert the list of dictionaries to a DataFrame
+        comparison_data = pd.DataFrame(rows)
+
+        return comparison_data
+
+    def build_comparison_graph(self, daily_data, city1, city2, start_date, end_date):
+        """
+        Build a graph comparing weather trends for two cities over a specific date range.
+
+        Args:
+            daily_data (pd.DataFrame): DataFrame containing daily weather data.
+            city1 (str): Name of the first city.
+            city2 (str): Name of the second city.
+            start_date (str): Start date (YYYY-MM-DD).
+            end_date (str): End date (YYYY-MM-DD).
+
+        Returns:
+            go.Figure: A Plotly figure comparing weather trends.
+        """
+        # Filter data for the selected cities and date range
+        filtered_data = daily_data[
+            (daily_data['name'].isin([city1, city2])) &
+            (daily_data['date'] >= start_date) &
+            (daily_data['date'] <= end_date)
+        ]
+
+        # Create line plot for temperature trends
+        fig = go.Figure()
+
+        for city in [city1, city2]:
+            city_data = filtered_data[filtered_data['name'] == city]
+            fig.add_trace(go.Scatter(
+                x=city_data['date'],
+                y=city_data['temp'],
+                mode='lines+markers',
+                name=f"{city} - Temperature",
+                line=dict(width=2)
+            ))
+
+        fig.update_layout(
+            title=f"Weather Trends Comparison: {city1} vs {city2}",
+            xaxis_title="Date",
+            yaxis_title="Temperature (°C)",
+            plot_bgcolor='white',
+            font=dict(size=12)
+        )
+
+        return fig
 
 
 

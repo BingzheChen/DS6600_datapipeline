@@ -68,7 +68,14 @@ app.layout = html.Div([
                 initial_visible_month='2023-11-01',
                 date='2023-11-01'
             )
-        ])
+        ], style={'margin-bottom': '20px'}),
+
+        # Current weather section
+        html.Div([
+            html.Label('Current Weather:'),
+            html.Button('Get Current Weather', id='current-weather-button', n_clicks=0),
+            html.Div(id='current-weather-output', style={'padding': '10px', 'margin-top': '10px'})
+        ], style={'margin-bottom': '20px'})
     ], style={'width': '25%', 'float': 'left', 'padding': '10px'}),
 
     html.Div([
@@ -106,13 +113,57 @@ app.layout = html.Div([
                     dcc.Dropdown(id='comparison-city-dropdown', options=city_options, value=city_options[0]['value'])
                 ], style={'width': '50%', 'margin-bottom': '20px'}),
                 html.Div(id='comparison-table', style={'padding': '20px'}),
+                html.Div(id='comparison-table'),
                 dcc.Graph(id='comparison-graph')
             ])
         ])
     ], style={'width': '70%', 'float': 'right', 'padding': '10px'})
 ])
 
-# Callbacks for interactivity (placeholders for now)
+# Callbacks for interactivity
+@app.callback(
+    Output('current-weather-output', 'children'),
+    [Input('current-weather-button', 'n_clicks')],
+    [Input('city-dropdown', 'value')]
+)
+def fetch_current_weather(n_clicks, selected_city):
+    if n_clicks > 0:
+        # Fetch current weather data
+        current_weather_df = dp.get_current_weather(selected_city)
+
+        if current_weather_df is not None and not current_weather_df.empty:
+            # Extract weather icon URL
+            weather_icon_url = current_weather_df['weather_icons'][0]
+
+            # Create a vertical table (transpose the DataFrame)
+            display_df = current_weather_df.drop(columns=['weather_icons']).T.reset_index()
+            display_df.columns = ['Attribute', 'Value']  # Rename columns for clarity
+
+            # Create a Plotly table
+            table_fig = ff.create_table(
+                display_df,
+                index=False,
+                height_constant=20  # Adjust row height for compactness
+            )
+
+            # Update table layout for a narrower table
+            table_fig.update_layout(
+                autosize=False,
+                width=400,  # Set table width
+                margin=dict(l=20, r=20, t=10, b=10)  # Reduce margins
+            )
+
+            # Render the weather icon above the table
+            return html.Div([
+                html.Div([
+                    html.Img(src=weather_icon_url, style={'width': '50px', 'height': '50px', 'margin-bottom': '10px'}),
+                ], style={'text-align': 'center'}),
+                dcc.Graph(figure=table_fig, style={'margin-top': '10px'})
+            ], style={'display': 'flex', 'flex-direction': 'column', 'align-items': 'center'})
+        else:
+            return "Unable to fetch current weather data. Please try again."
+    return "Click the button to fetch current weather."
+
 @app.callback(
     Output('city-info-table', 'children'),
     Input('city-dropdown', 'value')
@@ -224,23 +275,33 @@ def update_overall_analysis(selected_city):
     fig2 = dp.cloud_cover_vs_solar_radiation(daily_data, selected_city)
     fig3 = dp.seasonal_analysis(daily_data, selected_city)
     fig4 = dp.extreme_weather_analysis(daily_data, selected_city)
+    fig5 = dp.geographical_insights(constants, daily_data)
 
     return html.Div([
         html.Div([dcc.Graph(figure=fig1)], style={'width': '48%', 'display': 'inline-block'}),
         html.Div([dcc.Graph(figure=fig2)], style={'width': '48%', 'display': 'inline-block'}),
         html.Div([dcc.Graph(figure=fig3)], style={'width': '48%', 'display': 'inline-block'}),
-        html.Div([dcc.Graph(figure=fig4)], style={'width': '48%', 'display': 'inline-block'})
+        html.Div([dcc.Graph(figure=fig4)], style={'width': '48%', 'display': 'inline-block'}),
+        html.Div([dcc.Graph(figure=fig5)], style={'width': '100%', 'display': 'inline-block'})
     ])
 
 @app.callback(
     [Output('comparison-table', 'children'),
      Output('comparison-graph', 'figure')],
     [Input('city-dropdown', 'value'),
-     Input('comparison-city-dropdown', 'value')]
+     Input('comparison-city-dropdown', 'value'),
+     Input('start-date', 'date'),
+     Input('end-date', 'date')]
 )
-def update_city_comparison(city1, city2):
-    # Placeholder for comparison table and graph
-    return f"Comparison between {city1} and {city2}", {}
+def update_city_comparison(city1, city2, start_date, end_date):
+    # Build comparison table and graph using Datapipeline methods
+    comparison_table = dp.build_comparison_table(daily_data, city1, city2, start_date, end_date)
+    comparison_graph = dp.build_comparison_graph(daily_data, city1, city2, start_date, end_date)
+
+    # Convert the comparison table to a Dash-friendly format
+    table_fig = ff.create_table(comparison_table)
+
+    return dcc.Graph(figure=table_fig), comparison_graph
 
 # Run the app
 if __name__ == '__main__':
