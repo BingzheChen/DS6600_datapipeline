@@ -4,14 +4,9 @@ import os
 import dotenv
 import requests
 import json
-from bs4 import BeautifulSoup
-import psycopg
-import pymongo
-from bson.json_util import dumps, loads
-import sqlite3
+# import psycopg
 from sqlalchemy import create_engine
 import plotly.express as px
-import cfgrib
 import xarray as xr
 import plotly.graph_objs as go
 import pymysql
@@ -319,21 +314,21 @@ class DataPipeline:
         dt['dtype'] = dt['dtype'].replace(replace_map)
         return dt.to_string(index=False, header=False)
     
-    def connect_to_postgres(self, pw, user='postgres', 
-                            host='localhost', port='5432',
-                            create_datapipeline = False):
-        dbserver = psycopg.connect(
-            user=user, 
-            password=pw, 
-            host=host, 
-            port=port)
-        dbserver.autocommit = True
-        if create_datapipeline:
-                cursor = dbserver.cursor()
-                cursor.execute("DROP DATABASE IF EXISTS datapipeline")
-                cursor.execute("CREATE DATABASE datapipeline")
-        engine = create_engine(f'postgresql+psycopg://{user}:{pw}@{host}:{port}/datapipeline')
-        return dbserver, engine
+    # def connect_to_postgres(self, pw, user='postgres', 
+    #                         host='localhost', port='5432',
+    #                         create_datapipeline = False):
+    #     dbserver = psycopg.connect(
+    #         user=user, 
+    #         password=pw, 
+    #         host=host, 
+    #         port=port)
+    #     dbserver.autocommit = True
+    #     if create_datapipeline:
+    #             cursor = dbserver.cursor()
+    #             cursor.execute("DROP DATABASE IF EXISTS datapipeline")
+    #             cursor.execute("CREATE DATABASE datapipeline")
+    #     engine = create_engine(f'postgresql+psycopg://{user}:{pw}@{host}:{port}/datapipeline')
+    #     return dbserver, engine
     
     def connect_to_mysql(self, pw, user='root', host='localhost', port='3306', create_datapipeline=False):
         """

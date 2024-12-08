@@ -8,17 +8,21 @@ import plotly.graph_objs as go
 
 # Connect to the PostgreSQL database
 dp = DataPipeline()
-server, engine = dp.connect_to_mysql(pw=dp.MYSQL_PASSWORD)
+# server, engine = dp.connect_to_mysql(pw=dp.MYSQL_PASSWORD, host='127.0.0.1')
 
-# Load the data from the database
-my_query = "SELECT * FROM hourlydata"
-hourly_data = pd.read_sql_query(my_query, con=engine)
+# # Load the data from the database
+# my_query = "SELECT * FROM hourlydata"
+# hourly_data = pd.read_sql_query(my_query, con=engine)
 
-my_query = "SELECT * FROM dailydata"
-daily_data = pd.read_sql_query(my_query, con=engine)
+# my_query = "SELECT * FROM dailydata"
+# daily_data = pd.read_sql_query(my_query, con=engine)
 
-my_query = "SELECT * FROM constants"
-constants = pd.read_sql_query(my_query, con=engine)
+# my_query = "SELECT * FROM constants"
+# constants = pd.read_sql_query(my_query, con=engine)
+
+hourly_data = pd.read_csv('hourlydata.csv')
+daily_data = pd.read_csv('dailydata.csv')
+constants = pd.read_csv('constants.csv')
 
 # Dropdown options for cities and variables
 city_options = [{'label': city, 'value': city} for city in constants['name'].unique()]
