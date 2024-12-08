@@ -29,10 +29,21 @@ services:
       - datapipelinemongodata:/data/db
     networks:
       - dbnetwork
+  mysql:
+    image: mysql:latest
+    env_file:
+      - .env
+    ports:
+      - "3306:3306"
+    volumes:
+      - datapipelinemysqldata:/var/lib/mysql
+    networks:
+      - dbnetwork
 
 volumes:
   datapipelinepostgresdata:
   datapipelinemongodata:
+  datapipelinemysqldata:
 
 networks:
   dbnetwork:

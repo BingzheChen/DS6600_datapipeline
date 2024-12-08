@@ -14,6 +14,7 @@ import plotly.express as px
 import cfgrib
 import xarray as xr
 import plotly.graph_objs as go
+import pymysql
 
 dotenv.load_dotenv()
 
@@ -22,6 +23,7 @@ class DataPipeline:
         self.mypassword = os.getenv('mypassword')
         self.weatherstackkey = os.getenv('weatherstackkey')
         self.POSTGRES_PASSWORD = os.getenv('POSTGRES_PASSWORD')
+        self.MYSQL_PASSWORD = os.getenv('MYSQL_ROOT_PASSWORD')
         self.MONGO_INITDB_ROOT_USERNAME = os.getenv('MONGO_INITDB_ROOT_USERNAME')
         self.MONGO_INITDB_ROOT_PASSWORD = os.getenv('MONGO_INITDB_ROOT_PASSWORD')
         self.target_coords = [
@@ -332,6 +334,43 @@ class DataPipeline:
                 cursor.execute("CREATE DATABASE datapipeline")
         engine = create_engine(f'postgresql+psycopg://{user}:{pw}@{host}:{port}/datapipeline')
         return dbserver, engine
+    
+    def connect_to_mysql(self, pw, user='root', host='localhost', port='3306', create_datapipeline=False):
+        """
+        Connect to MySQL and optionally create the `datapipeline` database.
+        
+        Args:
+            pw (str): MySQL root password.
+            user (str): MySQL username.
+            host (str): MySQL host address.
+            port (str): MySQL port number.
+            create_datapipeline (bool): Whether to drop and create the `datapipeline` database.
+
+        Returns:
+            dbserver: pymysql connection object.
+            engine: SQLAlchemy engine for MySQL.
+        """
+        # Connect to MySQL server
+        dbserver = pymysql.connect(
+            user=user,
+            password=pw,
+            host=host,
+            port=int(port),
+            database=None  # Connect to MySQL without specifying a database
+        )
+
+        # Autocommit to allow database creation
+        dbserver.autocommit(True)
+
+        if create_datapipeline:
+            cursor = dbserver.cursor()
+            cursor.execute("DROP DATABASE IF EXISTS datapipeline")
+            cursor.execute("CREATE DATABASE datapipeline")
+            print("Database `datapipeline` created successfully in MySQL.")
+
+        # Create SQLAlchemy engine for the newly created database
+        engine = create_engine(f'mysql+pymysql://{user}:{pw}@{host}:{port}/datapipeline')
+        return dbserver, engine   
     
     def make_dailydata_df(self, daily_data, engine):
         daily_data.columns = daily_data.columns.str.lower()

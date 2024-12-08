@@ -8,7 +8,7 @@ import plotly.graph_objs as go
 
 # Connect to the PostgreSQL database
 dp = DataPipeline()
-server, engine = dp.connect_to_postgres(pw=dp.POSTGRES_PASSWORD)
+server, engine = dp.connect_to_mysql(pw=dp.MYSQL_PASSWORD)
 
 # Load the data from the database
 my_query = "SELECT * FROM hourlydata"
@@ -38,7 +38,7 @@ app = dash.Dash(__name__, external_stylesheets=['https://codepen.io/chriddyp/pen
 
 # App layout
 app.layout = html.Div([
-    html.H1("How's the weather like?", style={'text-align': 'center'}),
+    html.H1("What's the weather like?", style={'text-align': 'center'}),
     html.Div([
         # City dropdown
         html.Div([
@@ -113,7 +113,7 @@ app.layout = html.Div([
                     dcc.Dropdown(id='comparison-city-dropdown', options=city_options, value=city_options[0]['value'])
                 ], style={'width': '50%', 'margin-bottom': '20px'}),
                 html.Div(id='comparison-table', style={'padding': '20px'}),
-                html.Div(id='comparison-table'),
+                # html.Div(id='comparison-table'),
                 dcc.Graph(id='comparison-graph')
             ])
         ])

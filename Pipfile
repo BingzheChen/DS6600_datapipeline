@@ -29,6 +29,8 @@ jupyterlab = "==4.2.5"
 cfgrib = "*"
 xarray = "*"
 sumy = "*"
+pymysql = "*"
+cryptography = "*"
 
 [dev-packages]
 
